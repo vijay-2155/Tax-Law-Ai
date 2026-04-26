@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/icon.png" width="120" alt="TaxIQ App Icon" />
+
 ![TaxIQ Banner](docs/banner.png)
 
 # TaxIQ — Indian Income Tax AI Assistant
