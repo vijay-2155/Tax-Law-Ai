@@ -1,0 +1,62 @@
+# ── Environment / Secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+.eggs/
+
+# ── Large data files (not needed in repo — vectors are on Qdrant Cloud) ──────
+backend/data/*.npy
+backend/data/parsed_*.json
+backend/data/qdrant/
+backend/data/summaries/
+backend/data/examples/
+
+# ── PDFs (too large for git) ─────────────────────────────────────────────────
+pdfs/
+
+# ── Node / Frontend ──────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# ── PyInstaller build output ─────────────────────────────────────────────────
+dist/
+build/__pycache__/
+build/hooks/
+*.manifest
+*.spec.bak
+
+# ── IDE / Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ── OS generated ─────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Agent / AI tool directories ──────────────────────────────────────────────
+.claude/
+.codex
+.gemini/
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.bak
+*.tmp

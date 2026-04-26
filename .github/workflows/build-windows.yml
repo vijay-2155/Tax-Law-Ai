@@ -1,0 +1,116 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - "v*"          # trigger on version tags: git tag v1.0.0 && git push --tags
+  workflow_dispatch:  # also allows manual trigger from GitHub Actions UI
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Node / Frontend build ─────────────────────────────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ── Python / Backend build ────────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e ".[build]"
+          pip install ddgs
+
+      # ── Write .env from GitHub Secrets ───────────────────────────────────────
+      # Store QDRANT_URL and QDRANT_API_KEY as GitHub repository secrets.
+      # Go to: repo → Settings → Secrets and variables → Actions → New secret
+      - name: Create .env from secrets
+        shell: pwsh
+        run: |
+          @"
+          QDRANT_URL=${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
+          OLLAMA_BASE_URL=http://localhost:11434
+          OLLAMA_EMBED_MODEL=qwen3-embedding
+          OLLAMA_CHAT_MODEL=qwen2.5:7b
+          LLM_PROVIDER=ollama
+          LLM_MODEL=auto
+          LLM_API_KEY=
+          LLM_BASE_URL=
+          APP_PORT=8000
+          APP_HOST=127.0.0.1
+          OLLAMA_CLOUD_API_KEY=
+          OPENAI_API_KEY=
+          ANTHROPIC_API_KEY=
+          GEMINI_API_KEY=
+          GROQ_API_KEY=
+          OPENROUTER_API_KEY=
+          "@ | Out-File -FilePath .env -Encoding utf8NoBOM
+
+      # ── PyInstaller ───────────────────────────────────────────────────────────
+      - name: Build with PyInstaller
+        run: pyinstaller build/TaxIQ.spec --clean --noconfirm
+
+      # ── NSIS Installer ────────────────────────────────────────────────────────
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Create dist folder for installer output
+        run: New-Item -ItemType Directory -Force -Path dist | Out-Null
+        shell: pwsh
+
+      - name: Build NSIS installer
+        run: makensis build\installer.nsi
+
+      # ── Upload artifact ───────────────────────────────────────────────────────
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TaxIQ-Setup-Windows
+          path: dist/TaxIQ-Setup.exe
+          retention-days: 30
+
+      # ── Create GitHub Release (on tag push) ───────────────────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/TaxIQ-Setup.exe
+          name: "TaxIQ ${{ github.ref_name }}"
+          body: |
+            ## TaxIQ ${{ github.ref_name }} — Windows Installer
+
+            ### Install
+            1. Download `TaxIQ-Setup.exe`
+            2. Run it (no Python or Node.js needed)
+            3. Launch TaxIQ from the Desktop or Start Menu
+
+            ### Requirements
+            - Windows 10 / 11 (64-bit)
+            - Microsoft Edge WebView2 Runtime (included with Windows 11; auto-installed on Windows 10)
+            - Ollama running locally for AI features (`ollama serve`)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
