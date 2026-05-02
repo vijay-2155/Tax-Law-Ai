@@ -68,7 +68,12 @@ class LLMConfig(BaseModel):
             #   API key set  → direct cloud API (requires Bearer token)
             #   No API key   → local Ollama daemon (user ran `ollama signin`,
             #                  daemon transparently proxies cloud model requests)
-            return "https://api.ollama.com" if self.effective_api_key else "http://localhost:11434"
+            if self.effective_api_key:
+                return "https://api.ollama.com"
+            # In Docker, localhost:11434 is inside the container — not the host.
+            # OLLAMA_BASE_URL env var lets docker-compose point to host.docker.internal:11434
+            import os
+            return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
         return defaults.get(self.provider, "")
 
 

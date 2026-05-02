@@ -45,6 +45,11 @@ services:
       # Local Qdrant — no API key needed
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ""
+      # Ollama signed-in mode: point to host machine's Ollama daemon
+      # host.docker.internal resolves to your PC on Mac/Windows/Linux (Docker 20.10+)
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # needed on Linux
     env_file:
       - .env                           # user's LLM API keys (Ollama Cloud, etc.)
     volumes:
