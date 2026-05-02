@@ -14,6 +14,8 @@ The app:
 from __future__ import annotations
 import os
 import sys
+import asyncio
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -28,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from backend.config import (
     APP_HOST, APP_PORT,
     LLM_PROVIDER, LLM_MODEL, LLM_API_KEY, LLM_BASE_URL,
+    HF_EMBED_MODEL, HF_RERANKER_MODEL, HF_TOKEN,
 )
 from backend.indexing.qdrant_store import QdrantStore
 from backend.rag.retriever import Retriever
@@ -37,6 +40,37 @@ from backend.api.routes_section import router as section_router
 from backend.api.routes_chat import router as chat_router
 from backend.api.routes_heads import router as heads_router
 from backend.api.routes_settings import router as settings_router
+
+
+# ---------------------------------------------------------------------------
+# Setup state (tracks auto-load progress for /api/setup-status)
+# ---------------------------------------------------------------------------
+
+class _SetupState:
+    """Thread-safe container for the auto-load progress."""
+    def __init__(self):
+        self.status: str = "idle"   # idle | loading | done | error
+        self.message: str = ""
+        self.progress: dict = {}    # {act_year: {done, total}}
+        self._lock = threading.Lock()
+
+    def update(self, status: str, message: str = "", act: str = "", done: int = 0, total: int = 0):
+        with self._lock:
+            self.status = status
+            self.message = message
+            if act:
+                self.progress[act] = {"done": done, "total": total}
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            return {
+                "status": self.status,
+                "message": self.message,
+                "progress": dict(self.progress),
+            }
+
+
+_setup = _SetupState()
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +85,62 @@ async def lifespan(app: FastAPI):
     store = QdrantStore()
     app.state.store = store
     app.state.retriever = Retriever(store)
+
+    # Set HuggingFace token for model downloads (faster, allows gated models)
+    if HF_TOKEN:
+        os.environ.setdefault("HF_TOKEN", HF_TOKEN)
+        os.environ.setdefault("HUGGINGFACE_TOKEN", HF_TOKEN)
+
+    # ── Auto-load Qdrant if collections are empty ─────────────────────────
+    # This runs in a background thread so the app stays responsive.
+    # The /api/setup-status endpoint lets the frontend poll progress.
+    try:
+        from scripts.load_to_qdrant import collections_populated, load_all
+        if not collections_populated():
+            print("[setup] Qdrant collections are empty — starting auto-load...")
+            _setup.update("loading", "Loading Income Tax Acts into database...")
+
+            def _progress_cb(act_year: str, done: int, total: int):
+                _setup.update("loading",
+                              f"Loading ITA {act_year}: {done}/{total} chunks",
+                              act=act_year, done=done, total=total)
+
+            def _run_load():
+                try:
+                    load_all(progress_cb=_progress_cb)
+                    _setup.update("done", "Setup complete — TaxIQ is ready!")
+                    print("[setup] Auto-load complete.")
+                except Exception as exc:
+                    _setup.update("error", f"Setup failed: {exc}")
+                    print(f"[setup] ERROR during auto-load: {exc}")
+
+            t = threading.Thread(target=_run_load, daemon=True, name="qdrant-autoload")
+            t.start()
+        else:
+            _setup.update("done", "TaxIQ is ready!")
+            print("[setup] Qdrant collections already populated.")
+    except Exception as e:
+        print(f"[setup] Warning: could not check Qdrant collections ({e})")
+        _setup.update("done", "TaxIQ is ready (setup check skipped)")
+
+    # Pre-warm embedding model (downloads on first run, ~2.4 GB)
+    # This prevents a cold-start delay on the first user query.
+    print(f"Loading embedding model: {HF_EMBED_MODEL} ...")
+    try:
+        from backend.indexing.embedder import embed_query
+        embed_query("warmup")  # trigger lazy load
+        print(f"Embedding model ready.")
+    except Exception as e:
+        print(f"Warning: Embedding model failed to load ({e}). Queries may be slow on first request.")
+
+    # Pre-warm reranker model (~1.3 GB)
+    print(f"Loading reranker model: {HF_RERANKER_MODEL} ...")
+    try:
+        from backend.rag.reranker import rerank_with_fallback
+        rerank_with_fallback("warmup", [{"text": "test"}], top_k=1)  # trigger lazy load
+        print(f"Reranker model ready.")
+    except Exception as e:
+        print(f"Warning: Reranker model failed to load ({e}). Will use vector scores as fallback.")
 
     # Build default LLM config from env
     provider_keys = {}
@@ -129,6 +219,12 @@ app.include_router(settings_router, prefix="/api", tags=["settings"])
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "1.0.0"}
+
+
+@app.get("/api/setup-status")
+async def setup_status():
+    """Poll this endpoint to track first-run data loading progress."""
+    return _setup.snapshot()
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 """
-Qdrant Cloud vector store wrapper.
+Qdrant vector store wrapper — supports local Docker and Qdrant Cloud.
 
-Connects to Qdrant Cloud free cluster using QDRANT_URL + QDRANT_API_KEY from .env.
+Local mode : QDRANT_URL=http://localhost:6333  (no API key needed)
+Cloud mode : QDRANT_URL=https://....qdrant.io + QDRANT_API_KEY=<key>
 
 Two collections per Act:
   - tax_2025  / tax_1961   (PDF-extracted chunks from extract_and_index.py)
@@ -32,7 +33,7 @@ from qdrant_client.models import (
 
 from .chunker import Chunk
 from .embedder import EMBED_DIM
-from ..config import QDRANT_URL, QDRANT_API_KEY
+from ..config import QDRANT_URL, QDRANT_API_KEY, QDRANT_LOCAL
 from ..enrichment.rag_schema import RagChunk
 
 
@@ -41,18 +42,20 @@ def _collection_name(act_year: str) -> str:
 
 
 def _build_client() -> QdrantClient:
-    """Build Qdrant Cloud client from config."""
-    if not QDRANT_URL or not QDRANT_API_KEY:
-        raise RuntimeError(
-            "Qdrant Cloud credentials missing.\n"
-            "Set QDRANT_URL and QDRANT_API_KEY in your .env file.\n"
-            "Get them from: https://cloud.qdrant.io"
-        )
-    return QdrantClient(
-        url=QDRANT_URL,
-        api_key=QDRANT_API_KEY,
-        timeout=120,          # 120s per request (4096-dim vectors are large)
-    )
+    """Build Qdrant client — local Docker or Cloud depending on config."""
+    url = QDRANT_URL or "http://localhost:6333"
+    if QDRANT_LOCAL:
+        # Local Docker: no authentication needed
+        return QdrantClient(url=url, timeout=60)
+    else:
+        # Qdrant Cloud: requires API key
+        if not QDRANT_API_KEY:
+            raise RuntimeError(
+                "Qdrant Cloud credentials missing.\n"
+                "Set QDRANT_URL and QDRANT_API_KEY in your .env file.\n"
+                "For local Docker mode, leave QDRANT_API_KEY empty."
+            )
+        return QdrantClient(url=url, api_key=QDRANT_API_KEY, timeout=60)
 
 
 class QdrantStore:
@@ -128,7 +131,7 @@ class QdrantStore:
         chunks: list[Chunk],
         vectors: list[list[float]],
         act_year: str,
-        batch_size: int = 25,     # small batches — 4096-dim vectors are ~400KB each
+        batch_size: int = 50,     # 1024-dim vectors are ~100KB each — larger batches are fine
         verbose: bool = True,
         max_retries: int = 3,
     ) -> None:
@@ -178,7 +181,7 @@ class QdrantStore:
         chunks: list[RagChunk],
         vectors: list[list[float]],
         act_year: str,
-        batch_size: int = 25,
+        batch_size: int = 50,
         verbose: bool = True,
         max_retries: int = 3,
     ) -> None:
@@ -309,14 +312,47 @@ class QdrantStore:
         income_head: str | None = None,
         chunk_type: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Search both collections with payload filters and merge by score."""
-        _log.info("[Qdrant] search_both_acts | top_k=%d | income_head=%s", top_k, income_head)
+        """
+        Search both collections and merge.
+
+        Returns top_k from EACH act (interleaved) so both acts are equally
+        represented in the BGE reranker's candidate pool.
+
+        IMPORTANT: The two acts use DIFFERENT income_head taxonomies:
+          ITA 1961  "TDS / TCS"            → ITA 2025 "Collection and Recovery"
+          ITA 1961  "Deductions"            → ITA 2025 (no exact equivalent — skip filter)
+          ITA 1961  "Collection and Recovery" → ITA 2025 "Collection and Recovery"
+        We translate the filter before querying each collection.
+        """
+        # income_head translation: 1961-style label → 2025-style label
+        _HEAD_MAP_2025: dict[str, str | None] = {
+            "TDS / TCS":              "Collection and Recovery",
+            "Deductions":             None,   # no direct equivalent; search unfiltered
+            "Offences and Prosecution": None,
+            "Penalties":              "Offences and Prosecution",
+        }
+        head_2025 = _HEAD_MAP_2025.get(income_head, income_head) if income_head else None
+
+        _log.info("[Qdrant] search_both_acts | top_k=%d | income_head=%s | head_2025=%s",
+                  top_k, income_head, head_2025)
         print(f"[Qdrant] search_both_acts (top_k={top_k}, income_head={income_head})", flush=True)
-        r2025 = self.search(query_vector, "2025", top_k, income_head=income_head, chunk_type=chunk_type)
+
+        r2025 = self.search(query_vector, "2025", top_k, income_head=head_2025, chunk_type=chunk_type)
         r1961 = self.search(query_vector, "1961", top_k, income_head=income_head, chunk_type=chunk_type)
-        combined = r2025 + r1961
-        combined.sort(key=lambda r: r.get("score", 0), reverse=True)
-        return combined[:top_k]
+
+        # If filter was too narrow for 2025, fall back to unfiltered search
+        if not r2025 and head_2025 is not None:
+            _log.info("[Qdrant] 2025 head filter '%s' returned 0 results — retrying unfiltered", head_2025)
+            r2025 = self.search(query_vector, "2025", top_k, income_head=None, chunk_type=chunk_type)
+
+        # Interleave so both acts appear in the reranker pool
+        combined: list[dict] = []
+        for a, b in zip(r2025, r1961):
+            combined.append(a)
+            combined.append(b)
+        combined.extend(r2025[len(r1961):])
+        combined.extend(r1961[len(r2025):])
+        return combined  # BGE reranker upstream decides final top_k
 
     def scroll_by_payload(
         self,

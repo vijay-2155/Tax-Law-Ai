@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Loader2, ChevronRight, Briefcase, Home, TrendingUp,
-  DollarSign, BookOpen, Shield, FileText, Gavel, Scale,
+  IndianRupee, BookOpen, Shield, FileText, Gavel, Scale,
   BarChart2, AlertTriangle, Settings2, RefreshCw,
   ArrowLeftRight, Minus, HelpCircle, Globe
 } from "lucide-react";
@@ -14,7 +14,7 @@ const HEAD_META: Record<string, { icon: any; color: string; bg: string }> = {
   "House Property":              { icon: Home,           color: "#6ee7b7", bg: "rgba(110,231,183,0.08)" },
   "Business and Profession":     { icon: BarChart2,      color: "#c4b5fd", bg: "rgba(196,181,253,0.08)" },
   "Capital Gains":               { icon: TrendingUp,     color: "#fcd34d", bg: "rgba(252,211,77,0.08)" },
-  "Income from Other Sources":   { icon: DollarSign,     color: "#fb923c", bg: "rgba(251,146,60,0.08)" },
+  "Income from Other Sources":   { icon: IndianRupee,    color: "#fb923c", bg: "rgba(251,146,60,0.08)" },
   "Deductions":                  { icon: Minus,          color: "#67e8f9", bg: "rgba(103,232,249,0.08)" },
   "Rebates and Reliefs":         { icon: Shield,         color: "#86efac", bg: "rgba(134,239,172,0.08)" },
   "TDS / TCS":                   { icon: ArrowLeftRight, color: "#f0abfc", bg: "rgba(240,171,252,0.08)" },
@@ -78,7 +78,13 @@ export default function BrowsePage() {
       >
         {/* Header */}
         <div className="px-4 py-4" style={{ borderBottom: "1px solid var(--border-faint)" }}>
-          <div className="text-sm font-bold mb-3" style={{ color: "var(--text-primary)" }}>Browse by Head</div>
+          <div
+            className="text-xs font-bold uppercase tracking-widest mb-0.5"
+            style={{ color: "var(--accent-light)", letterSpacing: "0.08em" }}
+          >
+            ActInsight
+          </div>
+          <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>Browse by Income Head</div>
           <ActToggle value={act} onChange={setAct} allowBoth={false} />
         </div>
 
@@ -136,17 +142,28 @@ export default function BrowsePage() {
         {!selected && (
           <div className="flex flex-col items-center justify-center h-full text-center px-8">
             <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: "var(--bg-panel)" }}
+              style={{
+                width: "64px", height: "64px",
+                borderRadius: "16px",
+                overflow: "hidden",
+                border: "1px solid rgba(204,68,0,0.15)",
+                boxShadow: "0 4px 20px rgba(204,68,0,0.1)",
+                marginBottom: "16px",
+              }}
             >
-              <BookOpen className="w-6 h-6" style={{ color: "var(--text-muted)" }} />
+              <img src="/logo.png" alt="ActInsight" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
-            <p className="text-sm font-medium mb-1" style={{ color: "var(--text-secondary)" }}>
-              Select an income head
+            <p className="text-base font-semibold mb-1" style={{ color: "var(--text-primary)", fontFamily: "'Noto Serif', serif" }}>
+              Browse Income Heads
             </p>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Browse sections by category from the left panel
+              Select a category from the left panel to explore sections
             </p>
+            <div className="mt-6 flex items-center gap-2">
+              <div className="w-5 h-0.5 rounded" style={{ background: "#FF9933" }} />
+              <span className="text-[10px] uppercase tracking-widest font-medium" style={{ color: "var(--text-muted)" }}>IT Act 1961 · IT Act 2025</span>
+              <div className="w-5 h-0.5 rounded" style={{ background: "#138808" }} />
+            </div>
           </div>
         )}
 
@@ -190,7 +207,7 @@ export default function BrowsePage() {
                     className="card-hover w-full text-left px-4 py-3 flex items-center gap-3 fade-up"
                     style={{ animationDelay: `${i * 0.02}s` }}
                   >
-                    <span className="section-pill shrink-0">#{s.section}</span>
+                    <span className="section-pill shrink-0">§{s.section}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
                         {s.section_title}

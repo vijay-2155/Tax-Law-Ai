@@ -9,8 +9,12 @@ Usage:
 
 Prerequisites:
     - Fill QDRANT_URL and QDRANT_API_KEY in .env
+    - Fill HF_TOKEN in .env (optional but recommended for faster downloads)
     - Run scripts/parse_pdfs.py first to generate parsed_*.json files
-    - Ollama must be running with qwen3-embedding pulled
+    - Run: pip install sentence-transformers torch huggingface_hub
+
+  IMPORTANT: If you previously indexed with Ollama (qwen3-embedding, 4096-dim),
+  you MUST pass --recreate since the embedding dimension has changed to 1024.
 """
 
 import sys
@@ -24,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from backend.config import DATA_DIR, QDRANT_URL, validate, summary
 from backend.parsing.structure import ParsedAct
 from backend.indexing.chunker import chunk_parsed_act
-from backend.indexing.embedder import embed_texts, check_ollama_available, EMBED_MODEL
+from backend.indexing.embedder import embed_texts, check_embedder_available, EMBED_MODEL
 from backend.indexing.qdrant_store import QdrantStore
 
 
@@ -108,14 +112,15 @@ def main():
             print(f"ERROR: {e}")
         sys.exit(1)
 
-    # Check Ollama
-    print("Checking Ollama embedding model...")
-    if not check_ollama_available():
-        print(f"ERROR: Ollama not running or '{EMBED_MODEL}' not pulled.")
-        print("  Start Ollama : ollama serve")
-        print(f"  Pull model   : ollama pull {EMBED_MODEL}")
+    # Check HuggingFace embedding model
+    print("Checking HuggingFace embedding model...")
+    print("  (First run will download the model — this may take a few minutes)")
+    if not check_embedder_available():
+        print(f"ERROR: Embedding model '{EMBED_MODEL}' failed to load.")
+        print("  Install deps : pip install sentence-transformers torch huggingface_hub")
+        print("  Set HF token : add HF_TOKEN=<your_token> to .env  (get it at hf.co/settings/tokens)")
         sys.exit(1)
-    print(f"  Ollama OK — {EMBED_MODEL} ready\n")
+    print(f"  Embedding model OK — {EMBED_MODEL} ready (1024-dim)\n")
 
     acts = [args.act] if args.act else ["2025", "1961"]
 

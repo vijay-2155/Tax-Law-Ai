@@ -3,12 +3,33 @@ import { Link } from "react-router-dom";
 import Markdown from "../components/Markdown";
 import {
   Send, Loader2, Trash2, ExternalLink, ChevronDown,
-  Sparkles, User, Scale, BookOpen, TrendingUp, FileText,
+  User, BookOpen, TrendingUp, FileText,
   Brain, Copy, RefreshCw, Check, MessageSquare, Plus, Globe,
+  IndianRupee, Scale,
 } from "lucide-react";
 import { streamChat, getSettings, updateSettings, formatError, type ChatMessage, type ChatSource, type LLMSettings } from "../lib/api";
 import { getHistory, saveSession, deleteSession, type ChatSession, type Message } from "../lib/history";
 import ActToggle from "../components/ActToggle";
+
+// Ashoka Chakra icon for AI avatar
+function ChakraIcon({ size = 16 }: { size?: number }) {
+  const spokes = Array.from({ length: 24 }, (_, i) => {
+    const angle = (i * 360) / 24;
+    const rad = (angle * Math.PI) / 180;
+    const cx = size / 2, cy = size / 2, r = size * 0.38;
+    return {
+      x1: cx + r * 0.28 * Math.cos(rad), y1: cy + r * 0.28 * Math.sin(rad),
+      x2: cx + r * Math.cos(rad),        y2: cy + r * Math.sin(rad),
+    };
+  });
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
+      <circle cx={size/2} cy={size/2} r={size*0.38} stroke="#FF9933" strokeWidth="1.2" fill="none" />
+      <circle cx={size/2} cy={size/2} r={size*0.1} fill="#FF9933" />
+      {spokes.map((s, i) => <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#FF9933" strokeWidth="0.9" />)}
+    </svg>
+  );
+}
 
 
 // ── Thinking panel ────────────────────────────────────────────────────────────
@@ -115,14 +136,18 @@ function UserBubble({ content }: { content: string }) {
       <div className="max-w-[72%]">
         <div
           className="rounded-2xl rounded-br-md px-5 py-3.5 text-sm leading-relaxed"
-          style={{ background: "var(--bg-hover)", color: "var(--text-primary)" }}
+          style={{
+            background: "#eef2fb",
+            color: "var(--text-primary)",
+            border: "1px solid #dde3f0",
+          }}
         >
           {content}
         </div>
       </div>
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-        style={{ background: "linear-gradient(135deg, #4a8bff, #7b5ea7)" }}
+        style={{ background: "linear-gradient(135deg, #1a3a8f, #2452b8)" }}
       >
         <User className="w-4 h-4 text-white" />
       </div>
@@ -150,9 +175,17 @@ function AssistantBubble({
     <div className="flex gap-3 group">
       <div
         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-        style={{ background: "linear-gradient(135deg, var(--accent), #22d3ee)" }}
+        style={{
+          width: "32px", height: "32px",
+          borderRadius: "50%",
+          overflow: "hidden",
+          flexShrink: 0,
+          marginTop: "2px",
+          border: "1.5px solid rgba(204,68,0,0.2)",
+          boxShadow: "0 1px 6px rgba(204,68,0,0.12)",
+        }}
       >
-        <Sparkles className="w-4 h-4 text-white" />
+        <img src="/favicon.png" alt="AI" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
       </div>
       <div className="flex-1 min-w-0">
         {hasThinking && (
@@ -341,10 +374,12 @@ function ModelSelector({
 // ── Starter prompts ───────────────────────────────────────────────────────────
 
 const STARTERS = [
-  { icon: FileText,   text: "What is the TDS rate for contractors under the 2025 Act?" },
-  { icon: BookOpen,   text: "Explain Section 80C deductions with limits" },
-  { icon: TrendingUp, text: "What are capital gains exemptions for residential property?" },
-  { icon: Scale,      text: "Compare advance tax provisions in 1961 vs 2025" },
+  { icon: FileText,      text: "What is the TDS rate for contractors under the 2025 Act?" },
+  { icon: BookOpen,      text: "Explain Section 80C deductions with applicable limits" },
+  { icon: TrendingUp,    text: "What are capital gains exemptions for residential property?" },
+  { icon: Scale,         text: "Compare advance tax provisions in 1961 vs 2025 Act" },
+  { icon: IndianRupee,   text: "New tax regime vs old regime — which is better for salaried?" },
+  { icon: BookOpen,      text: "What is the surcharge on income above ₹50 lakh?" },
 ];
 
 // ── Think/content splitter ────────────────────────────────────────────────────
@@ -607,12 +642,18 @@ export default function ChatPage() {
           <div className="flex items-center gap-2.5">
             <div
               className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: "linear-gradient(135deg, var(--accent), #22d3ee)" }}
+              style={{
+                width: "28px", height: "28px",
+                borderRadius: "10px",
+                overflow: "hidden",
+                border: "1px solid rgba(204,68,0,0.15)",
+                boxShadow: "0 1px 6px rgba(204,68,0,0.1)",
+              }}
             >
-              <Sparkles className="w-3.5 h-3.5 text-white" />
+              <img src="/favicon.png" alt="ActInsight" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             </div>
             <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
-              Tax Law Assistant
+              ActInsight AI
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -638,19 +679,29 @@ export default function ChatPage() {
             {isEmpty ? (
               <div className="flex flex-col items-center justify-center h-full px-6 pb-24 fade-up">
                 <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
                   style={{
-                    background: "linear-gradient(135deg, var(--accent), #22d3ee)",
-                    boxShadow: "0 4px 28px rgba(74,139,255,0.35)",
+                    width: "80px", height: "80px",
+                    borderRadius: "20px",
+                    overflow: "hidden",
+                    border: "1px solid rgba(204,68,0,0.15)",
+                    boxShadow: "0 4px 24px rgba(204,68,0,0.12)",
+                    flexShrink: 0,
+                    marginBottom: "20px",
                   }}
                 >
-                  <Sparkles className="w-8 h-8 text-white" />
+                  <img src="/logo.png" alt="ActInsight" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
-                <h1 className="text-2xl font-bold mb-2 text-center" style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}>
-                  Ask me anything about Indian Tax Law
+                <h1
+                  className="text-2xl font-bold mb-1 text-center"
+                  style={{ color: "var(--text-primary)", letterSpacing: "-0.02em", fontFamily: "'Noto Serif', serif" }}
+                >
+                  Ask anything about Indian Tax Law
                 </h1>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--accent-light)" }}>
+                  ActInsight · Income Tax Intelligence
+                </p>
                 <p className="text-sm mb-10 max-w-md text-center leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  Precise answers with section citations — grounded in Income Tax Act 1961 &amp; 2025
+                  Grounded in IT Act 1961 &amp; IT Act 2025 — precise section citations, no hallucinations
                 </p>
                 <div className="grid grid-cols-2 gap-2.5 w-full max-w-2xl">
                   {STARTERS.map(({ icon: Icon, text }) => (
@@ -658,8 +709,9 @@ export default function ChatPage() {
                       key={text}
                       onClick={() => sendMessage(text)}
                       className="card-hover flex items-start gap-3 text-left text-sm px-4 py-3.5"
+                      style={{ borderLeft: "2px solid rgba(204,68,0,0.25)" }}
                     >
-                      <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent-light)" }} />
+                      <Icon className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent)" }} />
                       <span className="leading-snug line-clamp-2" style={{ color: "var(--text-secondary)" }}>
                         {text}
                       </span>
@@ -691,9 +743,9 @@ export default function ChatPage() {
             <div
               className="relative rounded-2xl transition-all"
               style={{
-                background: "var(--bg-panel)",
+                background: "var(--bg-surface)",
                 border: "1px solid var(--border-default)",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+                boxShadow: "0 2px 16px rgba(0,0,0,0.08)",
               }}
               onFocusCapture={e => (e.currentTarget.style.borderColor = "var(--border-accent)")}
               onBlurCapture={e => (e.currentTarget.style.borderColor = "var(--border-default)")}
@@ -703,7 +755,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={e => { setInput(e.target.value); autogrow(e.target); }}
                 onKeyDown={handleKey}
-                placeholder="Ask a tax law question…"
+                placeholder="Ask about any section, deduction, or tax provision…"
                 rows={1}
                 className="w-full bg-transparent resize-none px-5 pt-4 pb-3 text-sm leading-relaxed focus:outline-none"
                 style={{
@@ -734,7 +786,7 @@ export default function ChatPage() {
               </div>
             </div>
             <p className="text-center text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-              AI can make mistakes. Verify with a qualified CA for specific situations.
+              AI may make errors. Always verify with a qualified CA / Tax Advocate before filing.
             </p>
           </div>
         </div>

@@ -12,7 +12,9 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18%2B-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2%2B-FF6B35?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Cloud-DC143C?style=for-the-badge)](https://qdrant.tech)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Docker-DC143C?style=for-the-badge)](https://qdrant.tech)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![CI](https://github.com/vijay-2155/Tax-Law-Ai/actions/workflows/ci.yml/badge.svg)](https://github.com/vijay-2155/Tax-Law-Ai/actions)
 [![License](https://img.shields.io/badge/License-MIT-gold?style=for-the-badge)](LICENSE)
 
 </div>
@@ -62,57 +64,55 @@ TaxIQ is a **production-grade, agentic Retrieval-Augmented Generation (RAG) appl
 │      ▼                                                │
 │  grade_documents  ──── LLM relevance check            │
 │      │                                                │
-│      ├─ relevant ──────► generate                     │
-│      │                       │                        │
-│      └─ irrelevant ──► rewrite_query ──► retrieve     │
-│                            (max 2 retries)            │
-│                                                       │
-│  generate ─── also appends live web search chunks     │
-└──────────────────────────────────────────────────────┘
-               │
-┌──────────────▼───────────────────────────────────────┐
-│              Embedding & Indexing Pipeline            │
-│   PDF → Docling/PyMuPDF parse → chunking →           │
-│   Ollama embedding model → Qdrant upsert              │
-└──────────────────────────────────────────────────────┘
+│      �## 🚀 Quick Start
+
+### ⚡ Option A: Docker (Recommended — One Command)
+
+> **Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop) (no Python, no Node.js needed)
+
+```bash
+git clone https://github.com/vijay-2155/Tax-Law-Ai.git
+cd Tax-Law-Ai
+
+# Linux / Mac
+./start.sh
+
+# Windows
+start.bat
+```
+
+That's it. The browser opens automatically at **http://localhost:8000**.
+
+On **first run**, TaxIQ auto-loads the Income Tax Acts into the local database (~2 min). After that, starts in ~30 seconds. Configure your LLM in the **Settings** panel (Ollama Cloud sign-in, API key, or local Ollama).
+
+```bash
+# Stop
+docker compose down
+
+# Full reset (clears all data)
+docker compose down -v
 ```
 
 ---
 
-## 🚀 Quick Start
+### 🔧 Option B: Manual Setup (for development)
 
-### Prerequisites
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full dev setup instructions.
 
-| Requirement | Version |
-|---|---|
-| Python | 3.11 or later |
-| Node.js | 18 or later |
-| Ollama | Latest (for local LLM/embeddings) |
-| Qdrant Cloud account | Free tier works |
-
-### 1. Clone & set up environment
+**Prerequisites:** Python 3.11+, Node.js 18+, Docker (for local Qdrant)
 
 ```bash
-git clone https://github.com/your-username/taxiq.git
-cd taxiq
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
-# Install Python dependencies
+git clone https://github.com/vijay-2155/Tax-Law-Ai.git
+cd Tax-Law-Ai
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env          # edit your LLM config
+docker run -d -p 6333:6333 qdrant/qdrant
+python scripts/load_to_qdrant.py
+./run.sh
 ```
 
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-
-```dotenv
+---`dotenv
 # Required — Qdrant Cloud (https://cloud.qdrant.io)
 QDRANT_URL=https://your-cluster.qdrant.io
 QDRANT_API_KEY=your_qdrant_api_key
@@ -303,6 +303,30 @@ When the backend is running, open **http://localhost:8000/docs** for the interac
 1. Add a new class in `backend/rag/llm_provider.py` implementing `chat()` and `chat_stream()`
 2. Register it in `get_provider()` dispatch
 3. Add the API key env-var to `backend/main.py` lifespan and `.env.example`
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Dev setup (Docker or manual)
+- How to add a new LLM provider
+- How to re-index PDFs
+- PR and commit guidelines
+
+Please follow our [Code of Conduct](CODE_OF_CONDUCT.md) and report vulnerabilities privately via [SECURITY.md](SECURITY.md).
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Dev setup (Docker or manual)
+- How to add a new LLM provider
+- How to re-index PDFs
+- PR and commit guidelines
+
+Please follow our [Code of Conduct](CODE_OF_CONDUCT.md) and report vulnerabilities privately per [SECURITY.md](SECURITY.md).
 
 ---
 

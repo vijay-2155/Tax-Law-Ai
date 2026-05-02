@@ -9,7 +9,7 @@ import SettingsPage from "./pages/SettingsPage";
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex h-screen overflow-hidden bg-[#1a1a1a]">
+      <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg-app)" }}>
         <Sidebar />
         <main className="flex-1 overflow-hidden">
           <Routes>

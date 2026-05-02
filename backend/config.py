@@ -2,6 +2,13 @@
 Central configuration — reads from .env (project root) via python-dotenv.
 
 Import this everywhere instead of reading os.environ directly.
+
+Embedding: Qwen/Qwen3-Embedding-0.6B via sentence-transformers (1024-dim)
+Reranker : BAAI/bge-reranker-large via sentence-transformers CrossEncoder
+
+Qdrant modes:
+  Local Docker (default): QDRANT_URL=http://localhost:6333, QDRANT_API_KEY=(empty)
+  Cloud:                  QDRANT_URL=https://....qdrant.io, QDRANT_API_KEY=<key>
 """
 
 from __future__ import annotations
@@ -20,16 +27,30 @@ else:
     load_dotenv(_ROOT / ".env", override=False)
 
 
-# ── Qdrant Cloud ──────────────────────────────────────────────────────────────
+# ── Qdrant (local Docker or Cloud) ───────────────────────────────────────────
+# Local mode: set QDRANT_URL=http://localhost:6333 and leave QDRANT_API_KEY empty
+# Cloud mode: set both QDRANT_URL and QDRANT_API_KEY
 
-QDRANT_URL: str = os.environ.get("QDRANT_URL", "").strip()
+QDRANT_URL: str = os.environ.get("QDRANT_URL", "http://localhost:6333").strip()
 QDRANT_API_KEY: str = os.environ.get("QDRANT_API_KEY", "").strip()
 
-# ── Ollama ────────────────────────────────────────────────────────────────────
+# True when running against local Docker Qdrant (no auth needed)
+QDRANT_LOCAL: bool = not QDRANT_API_KEY
+
+# ── Ollama (chat only — no longer used for embeddings) ───────────────────────
 
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434").strip()
-OLLAMA_EMBED_MODEL: str = os.environ.get("OLLAMA_EMBED_MODEL", "qwen3-embedding").strip()
 OLLAMA_CHAT_MODEL: str = os.environ.get("OLLAMA_CHAT_MODEL", "qwen2.5:7b").strip()
+
+# ── HuggingFace local inference ───────────────────────────────────────────────
+# Embedding model: Qwen3-Embedding-0.6B (1024-dim, ~2.4 GB, auto-downloaded)
+HF_EMBED_MODEL: str = os.environ.get("HF_EMBED_MODEL", "Qwen/Qwen3-Embedding-0.6B").strip()
+# Reranker model: BGE cross-encoder (1.3 GB, auto-downloaded)
+HF_RERANKER_MODEL: str = os.environ.get("HF_RERANKER_MODEL", "BAAI/bge-reranker-large").strip()
+# Device: auto-detect CUDA/MPS/CPU, or force via env var
+EMBED_DEVICE: str = os.environ.get("EMBED_DEVICE", "").strip()
+# HuggingFace token (for gated models / faster downloads)
+HF_TOKEN: str = os.environ.get("HF_TOKEN", "").strip()
 
 # ── LLM provider (default — users can override in the Settings UI) ────────────
 
@@ -64,9 +85,10 @@ def validate() -> list[str]:
     """Return a list of missing/invalid config values."""
     errors: list[str] = []
     if not QDRANT_URL:
-        errors.append("QDRANT_URL is not set (required for Qdrant Cloud)")
-    if not QDRANT_API_KEY:
-        errors.append("QDRANT_API_KEY is not set (required for Qdrant Cloud)")
+        errors.append("QDRANT_URL is not set — defaulting to http://localhost:6333")
+    # QDRANT_API_KEY is optional: empty means local Docker mode (no auth)
+    if QDRANT_API_KEY and not QDRANT_URL:
+        errors.append("QDRANT_API_KEY is set but QDRANT_URL is missing")
     return errors
 
 
@@ -77,9 +99,13 @@ def summary() -> str:
 
     lines = [
         f"  QDRANT_URL     : {QDRANT_URL or '(not set)'}",
+        f"  QDRANT_MODE    : {'local Docker (no auth)' if QDRANT_LOCAL else 'cloud'}",
         f"  QDRANT_API_KEY : {mask(QDRANT_API_KEY)}",
-        f"  OLLAMA_BASE    : {OLLAMA_BASE_URL}",
-        f"  EMBED_MODEL    : {OLLAMA_EMBED_MODEL}",
+        f"  EMBED_MODEL    : {HF_EMBED_MODEL}",
+        f"  RERANKER_MODEL : {HF_RERANKER_MODEL}",
+        f"  EMBED_DEVICE   : {EMBED_DEVICE or 'auto'}",
+        f"  HF_TOKEN       : {'set' if HF_TOKEN else '(not set)'}",
+        f"  OLLAMA_BASE    : {OLLAMA_BASE_URL} (chat only)",
         f"  LLM_PROVIDER   : {LLM_PROVIDER}",
         f"  LLM_MODEL      : {LLM_MODEL}",
         f"  APP            : {APP_HOST}:{APP_PORT}",

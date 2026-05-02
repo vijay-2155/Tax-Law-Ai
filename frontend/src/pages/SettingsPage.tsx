@@ -74,14 +74,18 @@ export default function SettingsPage() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "var(--bg-panel)", border: "1px solid var(--border-default)" }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"
+            style={{
+              border: "1px solid rgba(204,68,0,0.15)",
+              boxShadow: "0 2px 10px rgba(204,68,0,0.1)",
+            }}
           >
-            <Settings className="w-4 h-4" style={{ color: "var(--accent)" }} />
+            <img src="/favicon.png" alt="ActInsight" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
           <div>
-            <h1 className="text-base font-bold" style={{ color: "var(--text-primary)" }}>Settings</h1>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Configure your LLM provider for AI answers</p>
+            <div className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: "var(--accent-light)", letterSpacing: "0.08em" }}>ActInsight</div>
+            <h1 className="text-base font-bold" style={{ color: "var(--text-primary)", fontFamily: "'Noto Serif', serif" }}>Settings</h1>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Configure your AI model provider for tax law queries</p>
           </div>
         </div>
 
@@ -251,11 +255,11 @@ export default function SettingsPage() {
           </h3>
           <div className="space-y-2.5 text-xs" style={{ color: "var(--text-secondary)" }}>
             {[
-              { key: "ollama",       label: "Ollama (Local)",  note: 'Free, on-machine. Start with: ollama serve' },
-              { key: "anthropic",    label: "Anthropic",       note: "Claude Sonnet 4.5 — fast and accurate" },
-              { key: "openai",       label: "OpenAI",          note: "GPT-4o recommended for best accuracy" },
-              { key: "groq",         label: "Groq",            note: "Fast inference, generous free tier" },
-              { key: "openrouter",   label: "OpenRouter",      note: "Access 100+ models with a single key" },
+              { key: "ollama",     label: "Ollama (Local)", note: 'Free, on-machine. Start with: ollama serve' },
+              { key: "anthropic",  label: "Anthropic",      note: "Claude — best at legal reasoning & structured answers" },
+              { key: "openai",     label: "OpenAI",         note: "GPT-4o — strong citation accuracy for tax law" },
+              { key: "groq",       label: "Groq",           note: "Fast inference, great for quick section lookups" },
+              { key: "openrouter", label: "OpenRouter",     note: "Access 100+ models with one API key" },
             ].map(({ key, label, note }) => (
               <div key={key} className="flex gap-2">
                 <div

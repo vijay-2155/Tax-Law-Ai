@@ -21,6 +21,7 @@ from typing import Any
 
 from ..indexing.embedder import embed_query
 from ..indexing.qdrant_store import QdrantStore
+from .reranker import rerank_with_fallback
 
 # ── Slab / rate / regime topic detection ─────────────────────────────────────
 # When a query touches tax rates or regimes, Section 202 (2025 Act) must
@@ -177,17 +178,22 @@ class Retriever:
         income_head: str | None = None,
         chunk_type: str | None = None,
         chapter: str | None = None,
+        rerank: bool = True,         # enable BGE cross-encoder reranking
     ) -> list[dict[str, Any]]:
         """
-        Smart retrieval with full payload filter exploitation.
+        Smart retrieval with full payload filter exploitation + BGE reranking.
 
-        - Exact section query   → payload scroll (zero vector ops)
-        - Filtered query        → vector search with server-side payload filter
-        - No filter inferrable  → pure vector search
-        - Cross-act query       → both collections merged
+        Pipeline:
+          1. Exact section query   → payload scroll (zero vector ops, no rerank)
+          2. Filtered query        → vector search (wider candidate pool) + rerank
+          3. No filter inferrable  → pure vector search + rerank
+          4. Cross-act query       → both collections merged + rerank
         """
+        # Candidate pool is wider when reranking is enabled — more candidates
+        # gives the cross-encoder more to work with.
+        candidate_k = int(top_k * 2.5) if rerank else top_k
 
-        # ── 1. Exact section lookup (fastest path) ───────────────────────────
+        # ── 1. Exact section lookup (fastest path, skip reranking) ───────────
         sec_num = _extract_section_number(query)
         if sec_num:
             if cross_act or act_year is None:
@@ -201,7 +207,7 @@ class Retriever:
             if results:
                 for r in results:
                     r.setdefault("score", 1.0)
-                return results[:top_k * 2]  # return all chunks for this section
+                return results[:top_k * 2]  # all chunks for the section, no rerank
 
         # ── 2. Infer payload filters from query ──────────────────────────────
         effective_head  = income_head  or _infer_income_head(query)
@@ -213,30 +219,33 @@ class Retriever:
         if cross_act or act_year is None:
             results = self.store.search_both_acts(
                 query_vector,
-                top_k=top_k,
+                top_k=candidate_k,
                 income_head=effective_head,
             )
             # Fallback: relax head filter if too few results
             if len(results) < 3 and effective_head:
-                results = self.store.search_both_acts(query_vector, top_k=top_k)
-            return results
+                results = self.store.search_both_acts(query_vector, top_k=candidate_k)
+            # Rerank and return top_k
+            if rerank and results:
+                return rerank_with_fallback(query, results, top_k=top_k)
+            return results[:top_k]
 
         # ── 4. Single act: filtered vector search ────────────────────────────
         results = self.store.search(
             query_vector,
             act_year=act_year,
-            top_k=top_k,
+            top_k=candidate_k,
             income_head=effective_head,
             chunk_type=effective_type,
             chapter=chapter,
         )
 
-        # Relax type filter first if not enough results
+        # Relax type filter first if not enough candidates
         if len(results) < 3 and effective_type:
             results = self.store.search(
                 query_vector,
                 act_year=act_year,
-                top_k=top_k,
+                top_k=candidate_k,
                 income_head=effective_head,
                 chapter=chapter,
             )
@@ -246,11 +255,16 @@ class Retriever:
             results = self.store.search(
                 query_vector,
                 act_year=act_year,
-                top_k=top_k,
+                top_k=candidate_k,
                 chapter=chapter,
             )
 
-        return self._inject_sec202_if_needed(query, results)
+        results = self._inject_sec202_if_needed(query, results)
+
+        # ── 5. Rerank final candidate set ─────────────────────────────────────
+        if rerank and results:
+            return rerank_with_fallback(query, results, top_k=top_k)
+        return results[:top_k]
 
     def retrieve_section(
         self,
@@ -267,14 +281,16 @@ class Retriever:
         query: str,
         top_k: int = 20,
     ) -> list[dict[str, Any]]:
-        """Retrieve top sections under a specific income head."""
+        """Retrieve top sections under a specific income head, with reranking."""
+        candidate_k = int(top_k * 2.5)
         qv = embed_query(query)
-        return self.store.search(
+        candidates = self.store.search(
             qv,
             act_year=act_year,
-            top_k=top_k,
+            top_k=candidate_k,
             income_head=income_head,
         )
+        return rerank_with_fallback(query, candidates, top_k=top_k)
 
     def retrieve_definitions(
         self,

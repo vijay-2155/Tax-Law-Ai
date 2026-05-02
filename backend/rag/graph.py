@@ -3,8 +3,8 @@ LangGraph-based agentic RAG pipeline for Income Tax Act queries.
 
 Graph nodes:
   route_question    → decide: exact_lookup | semantic_search | cross_act_search
-  retrieve          → vector / exact section lookup
-  grade_documents   → LLM-grades whether retrieved chunks are relevant
+  retrieve          → vector search (wide) + BGE cross-encoder reranking
+  grade_documents   → BGE reranker score check (replaces LLM grading)
   rewrite_query     → rephrase question if docs were irrelevant
   generate          → stream final answer with citations
 
@@ -33,6 +33,7 @@ from langgraph.graph.message import add_messages
 from ..indexing.qdrant_store import QdrantStore
 from ..indexing.embedder import embed_query
 from .retriever import Retriever, _extract_section_number, _infer_income_head
+from .reranker import rerank_with_fallback
 from .prompt_builder import build_context_prompt, SYSTEM_PROMPT
 from .llm_provider import LLMConfig, get_provider
 from .web_search import web_search_tax, web_results_to_chunks
@@ -366,7 +367,7 @@ async def stream_rag_response(
     config: LLMConfig,
     act_year: str = "2025",
     chat_history: list[dict[str, str]] | None = None,
-    top_k: int = 8,
+    top_k: int = 12,   # 12 final chunks: ~6 per act on cross-act queries
 ) -> AsyncIterator[str]:
     """
     Streaming wrapper: runs retrieval + grading synchronously, then streams generation.
@@ -432,41 +433,31 @@ async def stream_rag_response(
                     # Still nothing? Fall back to semantic search across both acts
                     if not chunks:
                         qv = embed_query(q)
-                        chunks = store.search_both_acts(qv, top_k=top_k)
+                        candidates = store.search_both_acts(qv, top_k=top_k * 2)
+                        chunks = rerank_with_fallback(q, candidates, top_k=top_k)
             else:
                 chunks = retriever.retrieve(q, act_year=None if act_year == "both" else act_year, top_k=top_k)
             chunks = retriever._inject_sec202_if_needed(q, chunks)
         elif strategy == "cross_act":
             qv = embed_query(q)
             head = _infer_income_head(q)
-            chunks = store.search_both_acts(qv, top_k=top_k, income_head=head)
+            # Wider candidate pool for cross-encoder reranking
+            candidates = store.search_both_acts(qv, top_k=top_k * 2, income_head=head)
+            chunks = rerank_with_fallback(q, candidates, top_k=top_k)
             chunks = retriever._inject_sec202_if_needed(q, chunks)
         else:
+            # Semantic: retriever already handles wide retrieval + reranking internally
             chunks = retriever.retrieve(q, act_year=None if act_year == "both" else act_year, top_k=top_k)
 
-        print(f"[RAG] attempt={attempt} strategy={strategy!r} → {len(chunks)} chunks retrieved", flush=True)
+        print(f"[RAG] attempt={attempt} strategy={strategy!r} → {len(chunks)} chunks (post-rerank)", flush=True)
 
-        # Grade (only on first semantic attempt, skip for exact if we have chunks)
-        if strategy != "exact" and attempt < MAX_RETRIES:
-            snippet = "\n---\n".join(
-                f"[{i+1}] {c.get('text', '')[:200]}" for i, c in enumerate(chunks[:4])
-            )
-            grade_user = (
-                f"Question: {q}\n\nChunks:\n{snippet}\n\nAre these relevant?"
-            )
-            try:
-                grade_raw = await _llm_call(_GRADE_SYSTEM, grade_user, config)
-                # Strip <think>...</think> blocks from reasoning models
-                grade_raw = re.sub(r"<think>[\s\S]*?</think>", "", grade_raw, flags=re.IGNORECASE).strip()
-                m = re.search(r'\{[^}]+\}', grade_raw)
-                relevant = json.loads(m.group(0)).get("relevant", True) if m else True
-            except Exception:
-                relevant = True
+        # BGE reranker already scores chunks — check if top chunk score is above threshold.
+        # Only do LLM rewrite if all chunks scored too low (edge case fallback).
+        top_score = chunks[0].get("reranker_score", chunks[0].get("score", 1.0)) if chunks else 0.0
+        RELEVANCE_THRESHOLD = -5.0  # BGE scores: high positive = relevant, very negative = irrelevant
 
-            if relevant or attempt >= MAX_RETRIES:
-                print(f"[RAG] grade=relevant={relevant} → {'generating' if relevant else 'rewriting'}", flush=True)
-                break
-
+        if strategy != "exact" and attempt < MAX_RETRIES and top_score < RELEVANCE_THRESHOLD:
+            print(f"[RAG] top reranker score={top_score:.3f} below threshold — rewriting query", flush=True)
             # Rewrite and retry
             try:
                 rewrite_raw = await _llm_call(
@@ -520,8 +511,37 @@ async def stream_rag_response(
     think_buffer = ""   # accumulates text while inside a <think> block
     in_think = False
 
+    # Leading-filler stripper: buffer first ~120 chars then strip opener phrases
+    _FILLER_RE = re.compile(
+        r"^\s*(Of course[.,!]?|Certainly[.,!]?|Sure[.,!]?|Absolutely[.,!]?"
+        r"|Great question[.,!]?|Excellent question[.,!]?"
+        r"|Based on (the |a )?(thorough review of |review of |)?(the |a )?(provided |retrieved |given |)?(legal |)context[^\n]*?[.,]"
+        r"|Based on (the |a )?(information|sections?|context|legal context)[^\n]*?[.,]"
+        r"|According to (the |a )?(provided |retrieved |)?(legal |)?context[^\n]*?[.,]"
+        r"|After (a |)(thorough |careful |)review of[^\n]*?[.,]"
+        r"|A thorough review of[^\n]*?[.,])",
+        re.IGNORECASE,
+    )
+    _FILLER_BUFFER_SIZE = 120
+    _filler_buf = ""      # accumulates tokens until buffer is large enough to check
+    _filler_done = False  # True once filler check is finished
+
     async for token in provider.chat_stream(system, messages):
         accumulated += token
+
+        # --- Leading filler stripping ---
+        if not _filler_done:
+            _filler_buf += token
+            if len(_filler_buf) >= _FILLER_BUFFER_SIZE or token.endswith(("\n", ".", "!", "?")):
+                _filler_done = True
+                clean = _FILLER_RE.sub("", _filler_buf).lstrip()
+                # inject the cleaned buffer into the normal token path
+                token = clean
+                _filler_buf = ""
+                if not token:
+                    continue
+            else:
+                continue  # still buffering
 
         if in_think:
             # We are inside a <think> block — keep buffering

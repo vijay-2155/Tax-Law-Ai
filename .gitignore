@@ -15,9 +15,11 @@ env/
 *.egg
 .eggs/
 
-# ── Large data files (not needed in repo — vectors are on Qdrant Cloud) ──────
-backend/data/*.npy
-backend/data/parsed_*.json
+# ── Pre-computed data (committed — enables zero-setup for new users) ─────────
+# These are the HF embedding vectors + parsed chunks (45 MB total).
+# DO NOT gitignore these — they are needed for docker compose to work.
+# vectors_new_*.npy = old embeddings from previous model, not needed
+backend/data/vectors_new_*.npy
 backend/data/qdrant/
 backend/data/summaries/
 backend/data/examples/
