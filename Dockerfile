@@ -13,7 +13,7 @@ WORKDIR /build
 
 # Install dependencies first (layer cache)
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --silent
+RUN npm install --prefer-offline 2>&1 || npm install
 
 # Copy source and build
 COPY frontend/ ./

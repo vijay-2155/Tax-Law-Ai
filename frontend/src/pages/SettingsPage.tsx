@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, CheckCircle, XCircle, Loader2, Zap } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Zap } from "lucide-react";
 import { getSettings, updateSettings, testConnection, formatError, type LLMSettings } from "../lib/api";
 
 const PROVIDER_LABELS: Record<string, string> = {

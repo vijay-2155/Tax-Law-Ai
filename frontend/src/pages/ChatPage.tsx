@@ -11,25 +11,6 @@ import { streamChat, getSettings, updateSettings, formatError, type ChatMessage,
 import { getHistory, saveSession, deleteSession, type ChatSession, type Message } from "../lib/history";
 import ActToggle from "../components/ActToggle";
 
-// Ashoka Chakra icon for AI avatar
-function ChakraIcon({ size = 16 }: { size?: number }) {
-  const spokes = Array.from({ length: 24 }, (_, i) => {
-    const angle = (i * 360) / 24;
-    const rad = (angle * Math.PI) / 180;
-    const cx = size / 2, cy = size / 2, r = size * 0.38;
-    return {
-      x1: cx + r * 0.28 * Math.cos(rad), y1: cy + r * 0.28 * Math.sin(rad),
-      x2: cx + r * Math.cos(rad),        y2: cy + r * Math.sin(rad),
-    };
-  });
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
-      <circle cx={size/2} cy={size/2} r={size*0.38} stroke="#FF9933" strokeWidth="1.2" fill="none" />
-      <circle cx={size/2} cy={size/2} r={size*0.1} fill="#FF9933" />
-      {spokes.map((s, i) => <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke="#FF9933" strokeWidth="0.9" />)}
-    </svg>
-  );
-}
 
 
 // ── Thinking panel ────────────────────────────────────────────────────────────

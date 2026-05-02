@@ -24,11 +24,11 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage    # vectors persist across restarts
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
 
   # ── TaxIQ app (FastAPI backend + React frontend) ──────────────────────────────
   app:
