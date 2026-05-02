@@ -37,7 +37,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # localhost only — blocks public internet access
     depends_on:
       qdrant:
         condition: service_healthy    # wait for Qdrant to be ready
