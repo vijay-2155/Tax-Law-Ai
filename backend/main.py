@@ -134,10 +134,11 @@ async def lifespan(app: FastAPI):
         print(f"Warning: Embedding model failed to load ({e}). Queries may be slow on first request.")
 
     # Pre-warm reranker model (~1.3 GB)
+    # Pass 2 chunks to bypass the len(chunks) <= top_k early-return guard
     print(f"Loading reranker model: {HF_RERANKER_MODEL} ...")
     try:
         from backend.rag.reranker import rerank_with_fallback
-        rerank_with_fallback("warmup", [{"text": "test"}], top_k=1)  # trigger lazy load
+        rerank_with_fallback("warmup", [{"text": "test 1"}, {"text": "test 2"}], top_k=1)  # trigger lazy load
         print(f"Reranker model ready.")
     except Exception as e:
         print(f"Warning: Reranker model failed to load ({e}). Will use vector scores as fallback.")
