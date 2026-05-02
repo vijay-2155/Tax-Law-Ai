@@ -19,7 +19,8 @@ anthropic>=0.40.0
 google-genai>=1.0.0
 groq>=0.13.0
 # ── HuggingFace local inference (embeddings + reranker) ───────────────────────
-sentence-transformers>=3.0.0
-torch>=2.0.0
+# Exact pins — 3.3.x + 4.44.x are verified compatible without torchvision conflicts
+sentence-transformers==3.3.1
+transformers==4.44.2
 huggingface_hub>=0.23.0
-duckduckgo-search>=5.3.1
+ddgs>=1.0.0
