@@ -238,12 +238,23 @@ else:
     _FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 if _FRONTEND_DIST.exists():
-    # Serve React build
+    # Serve Vite asset chunks (JS/CSS with hashed filenames)
     app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="assets")
+
+    # Serve root-level public files (logo.png, favicon.png, icon.png, etc.)
+    _PUBLIC_EXTS = {".png", ".ico", ".svg", ".jpg", ".jpeg", ".gif", ".webp", ".woff", ".woff2"}
+
+    @app.get("/{filename}", include_in_schema=False)
+    async def public_file(filename: str):
+        """Serve root-level public assets (images, fonts, icons)."""
+        file = _FRONTEND_DIST / filename
+        if file.exists() and file.suffix in _PUBLIC_EXTS:
+            return FileResponse(file)
+        return FileResponse(_FRONTEND_DIST / "index.html")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
-        """Serve index.html for all non-API routes (SPA routing)."""
+        """Serve index.html for all client-side SPA routes."""
         return FileResponse(_FRONTEND_DIST / "index.html")
 else:
     @app.get("/", include_in_schema=False)
