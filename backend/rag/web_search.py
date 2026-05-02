@@ -9,7 +9,7 @@ from typing import Any
 
 
 def _sync_search(query: str, max_results: int) -> list[dict[str, Any]]:
-    from ddgs import DDGS
+    from duckduckgo_search import DDGS
     search_query = f"{query} Indian income tax"
     try:
         with DDGS() as ddgs:
