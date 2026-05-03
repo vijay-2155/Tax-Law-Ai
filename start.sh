@@ -48,9 +48,10 @@ ok ".env found ✓"
 log "Starting TaxIQ services..."
 echo ""
 
-# Build if image doesn't exist yet
-if ! docker image inspect taxiq-app &>/dev/null 2>&1; then
-    log "First run — building Docker image (this takes ~5 minutes)..."
+# Pull latest image if not present
+if ! docker image inspect ghcr.io/vijay-2155/tax-law-ai:latest &>/dev/null 2>&1; then
+    log "First run — pulling TaxIQ image from registry (~2-3 GB, one-time download)..."
+    log "Grab a coffee ☕ this takes a few minutes..."
 fi
 
 docker compose up -d

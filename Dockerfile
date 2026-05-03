@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
 # TaxIQ — Multi-stage Dockerfile
 #

@@ -32,9 +32,7 @@ services:
 
   # ── TaxIQ app (FastAPI backend + React frontend) ──────────────────────────────
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/vijay-2155/tax-law-ai:latest   # pre-built — no source code needed
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"  # localhost only — blocks public internet access
