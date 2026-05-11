@@ -3,13 +3,14 @@
 #
 # Services:
 #   qdrant  — Local vector database (no account needed)
+#   ollama  — Local LLM runtime (auto-started, no host install needed)
 #   app     — FastAPI backend + React frontend
 #
 # Usage:
-#   First run:       docker compose up        (builds image, ~5 min)
-#   Subsequent:      docker compose up -d     (starts in ~30 sec)
+#   First run:       ./start.sh   (or start.bat on Windows)
+#   Manual start:    docker compose up -d
 #   Stop:            docker compose down
-#   Full reset:      docker compose down -v   (WARNING: clears all data)
+#   Full reset:      docker compose down -v   (WARNING: clears all data + models)
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
@@ -19,8 +20,8 @@ services:
     image: qdrant/qdrant:latest
     restart: unless-stopped
     ports:
-      - "6333:6333"     # REST API (used by the app)
-      - "6334:6334"     # gRPC (optional)
+      - "127.0.0.1:6333:6333"   # REST API (used by the app)
+      - "127.0.0.1:6334:6334"   # gRPC (optional)
     volumes:
       - qdrant_data:/qdrant/storage    # vectors persist across restarts
     healthcheck:
@@ -30,26 +31,52 @@ services:
       retries: 20
       start_period: 10s
 
+  # ── Ollama — local LLM runtime ────────────────────────────────────────────────
+  # Zero host configuration needed — Ollama runs fully inside Docker.
+  # Models are stored in the `ollama_models` volume and persist across restarts.
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"   # expose locally so UI/CLI can also reach it
+    volumes:
+      - ollama_models:/root/.ollama   # pulled models persist between restarts
+    # GPU passthrough (optional — remove or comment out if you don't have a GPU)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
   # ── TaxIQ app (FastAPI backend + React frontend) ──────────────────────────────
   app:
     image: ghcr.io/vijay-2155/tax-law-ai:latest   # pre-built — no source code needed
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"  # localhost only — blocks public internet access
+      - "127.0.0.1:8000:8000"   # localhost only — blocks public internet access
     depends_on:
       qdrant:
-        condition: service_healthy    # wait for Qdrant to be ready
+        condition: service_healthy
+      ollama:
+        condition: service_healthy    # wait for Ollama API to be ready
     environment:
       # Local Qdrant — no API key needed
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ""
-      # Ollama signed-in mode: point to host machine's Ollama daemon
-      # host.docker.internal resolves to your PC on Mac/Windows/Linux (Docker 20.10+)
-      OLLAMA_BASE_URL: http://host.docker.internal:11434
-    extra_hosts:
-      - "host.docker.internal:host-gateway"   # needed on Linux
+      # Ollama runs as a sibling Docker service — no host config needed!
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_PROVIDER: ollama
+      LLM_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
     env_file:
-      - .env                           # user's LLM API keys (Ollama Cloud, etc.)
+      - .env                           # user's optional overrides (API keys, model choice)
     volumes:
       - hf_models:/cache/huggingface   # cache HF embedding + reranker models
     healthcheck:
@@ -62,5 +89,6 @@ services:
 
 # ── Persistent volumes ────────────────────────────────────────────────────────
 volumes:
-  qdrant_data:    # Qdrant vector database — persists between restarts
-  hf_models:      # HuggingFace embedding + reranker models (~3.7 GB, downloaded once)
+  qdrant_data:      # Qdrant vector database — persists between restarts
+  ollama_models:    # Ollama LLM models (~4-8 GB depending on model, downloaded once)
+  hf_models:        # HuggingFace embedding + reranker models (~3.7 GB, downloaded once)

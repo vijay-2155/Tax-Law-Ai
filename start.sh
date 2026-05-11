@@ -34,18 +34,21 @@ ok "Docker is running ✓"
 if [[ ! -f .env ]]; then
     warn ".env not found — creating from template..."
     cp .env.example .env
-    warn "Please edit .env and set your LLM API key, then run ./start.sh again."
-    echo ""
-    echo "  Open .env in a text editor and fill in your Ollama Cloud API key"
-    echo "  (or leave as-is to use Ollama signed-in mode via the Settings UI)"
-    echo ""
-    exit 0
+    ok ".env created from template ✓  (using default local Ollama settings)"
 fi
 
 ok ".env found ✓"
 
+# ── Determine model to pull ───────────────────────────────────────────────────
+OLLAMA_MODEL="${OLLAMA_CHAT_MODEL:-qwen2.5:7b}"
+# Read from .env if set there
+if grep -q "^OLLAMA_CHAT_MODEL=" .env 2>/dev/null; then
+    OLLAMA_MODEL=$(grep "^OLLAMA_CHAT_MODEL=" .env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+fi
+OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:7b}"
+
 # ── Start services ────────────────────────────────────────────────────────────
-log "Starting TaxIQ services..."
+log "Starting TaxIQ services (Qdrant + Ollama + App)..."
 echo ""
 
 # Pull latest image if not present
@@ -57,7 +60,42 @@ fi
 docker compose up -d
 
 echo ""
-log "Waiting for TaxIQ to be ready..."
+log "Waiting for Ollama to be ready..."
+
+# Wait for Ollama API to be available
+OLLAMA_READY=false
+for i in $(seq 1 30); do
+    if curl -sf "http://localhost:11434/api/tags" &>/dev/null; then
+        OLLAMA_READY=true
+        break
+    fi
+    echo -ne "  ${CYAN}·${NC} Waiting for Ollama... (${i}/30)\r"
+    sleep 3
+done
+echo ""
+
+if [[ "$OLLAMA_READY" == "true" ]]; then
+    ok "Ollama is ready ✓"
+
+    # Check if the model is already pulled
+    if ! curl -sf "http://localhost:11434/api/tags" | grep -q "\"${OLLAMA_MODEL}\"" 2>/dev/null; then
+        log "Pulling model '${OLLAMA_MODEL}' into Ollama (one-time download, ~4-5 GB)..."
+        log "This only happens once — models are cached between restarts."
+        echo ""
+        docker compose exec ollama ollama pull "${OLLAMA_MODEL}" || \
+            warn "Model pull failed — the app will retry on first use."
+        echo ""
+        ok "Model '${OLLAMA_MODEL}' ready ✓"
+    else
+        ok "Model '${OLLAMA_MODEL}' already cached ✓"
+    fi
+else
+    warn "Ollama is taking longer than expected to start."
+    warn "The app will pull the model automatically on first use."
+fi
+
+echo ""
+log "Waiting for TaxIQ app to be ready..."
 
 # Poll health endpoint
 URL="http://localhost:8000"
@@ -76,11 +114,12 @@ echo ""
 if [[ "$READY" == "true" ]]; then
     ok "TaxIQ is ready! ✓"
     echo ""
-    echo -e "${BOLD}  → Opening http://localhost:8000${NC}"
+    echo -e "${BOLD}  → Open: http://localhost:8000${NC}"
     echo ""
-    echo -e "  ${CYAN}First run?${NC} Data loads automatically in the background (~2 min)."
-    echo -e "  ${CYAN}Stop app:${NC}  docker compose down"
-    echo -e "  ${CYAN}Full reset:${NC} docker compose down -v"
+    echo -e "  ${CYAN}LLM Model:${NC}  ${OLLAMA_MODEL} (running locally in Docker)"
+    echo -e "  ${CYAN}First run?${NC}  Data loads automatically in the background (~2 min)."
+    echo -e "  ${CYAN}Stop app:${NC}   docker compose down"
+    echo -e "  ${CYAN}Full reset:${NC} docker compose down -v  ⚠ clears models + data"
     echo ""
 
     # Open browser

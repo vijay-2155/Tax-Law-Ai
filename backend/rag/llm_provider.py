@@ -55,14 +55,7 @@ class LLMConfig(BaseModel):
     def effective_base_url(self) -> str:
         if self.base_url:
             return self.base_url
-        defaults = {
-            "ollama": "http://localhost:11434",
-            "openai": "https://api.openai.com/v1",
-            "groq": "https://api.groq.com/openai/v1",
-            "openrouter": "https://openrouter.ai/api/v1",
-            "anthropic": "https://api.anthropic.com",
-            "gemini": "https://generativelanguage.googleapis.com/v1beta",
-        }
+        import os
         if self.provider == "ollama_cloud":
             # Two modes per official docs:
             #   API key set  → direct cloud API (requires Bearer token)
@@ -71,9 +64,19 @@ class LLMConfig(BaseModel):
             if self.effective_api_key:
                 return "https://api.ollama.com"
             # In Docker, localhost:11434 is inside the container — not the host.
-            # OLLAMA_BASE_URL env var lets docker-compose point to host.docker.internal:11434
-            import os
+            # OLLAMA_BASE_URL env var lets docker-compose point to the Ollama service.
             return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        if self.provider == "ollama":
+            # Read OLLAMA_BASE_URL so docker-compose can inject 'http://ollama:11434'
+            # without needing to rebuild the image. Falls back to localhost for bare installs.
+            return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        defaults = {
+            "openai": "https://api.openai.com/v1",
+            "groq": "https://api.groq.com/openai/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
+            "anthropic": "https://api.anthropic.com",
+            "gemini": "https://generativelanguage.googleapis.com/v1beta",
+        }
         return defaults.get(self.provider, "")
 
 
