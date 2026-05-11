@@ -76,7 +76,8 @@ services:
       LLM_PROVIDER: ollama
       LLM_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
     env_file:
-      - .env                           # user's optional overrides (API keys, model choice)
+      - path: .env                     # user's optional overrides (API keys, model choice)
+        required: false                # works without .env — defaults above are used
     volumes:
       - hf_models:/cache/huggingface   # cache HF embedding + reranker models
     healthcheck:
