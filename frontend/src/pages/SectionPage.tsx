@@ -18,6 +18,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: "Ollama", ollama_cloud: "Ollama Cloud",
   openai: "OpenAI", anthropic: "Anthropic",
   gemini: "Gemini", groq: "Groq", openrouter: "OpenRouter",
+  nvidia: "NVIDIA",
 };
 
 function ModelSelector({

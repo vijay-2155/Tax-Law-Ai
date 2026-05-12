@@ -10,6 +10,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   gemini:       "Google Gemini",
   groq:         "Groq",
   openrouter:   "OpenRouter",
+  nvidia:       "NVIDIA",
 };
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -20,6 +21,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   gemini:       "#60a5fa",
   groq:         "#c084fc",
   openrouter:   "#fb923c",
+  nvidia:       "#76b900",
 };
 
 export default function SettingsPage() {
@@ -173,6 +175,11 @@ export default function SettingsPage() {
                     (get key ↗)
                   </a>
                 )}
+                {currentProvider === "nvidia" && (
+                  <a href="https://build.nvidia.com/explore/discover" target="_blank" className="normal-case font-normal" style={{ color: "var(--accent-light)" }}>
+                    (get key ↗)
+                  </a>
+                )}
               </label>
               <input
                 type="password"
@@ -260,6 +267,7 @@ export default function SettingsPage() {
               { key: "openai",     label: "OpenAI",         note: "GPT-4o — strong citation accuracy for tax law" },
               { key: "groq",       label: "Groq",           note: "Fast inference, great for quick section lookups" },
               { key: "openrouter", label: "OpenRouter",     note: "Access 100+ models with one API key" },
+              { key: "nvidia",     label: "NVIDIA",         note: "NVIDIA Build hosted models via OpenAI-compatible chat API" },
             ].map(({ key, label, note }) => (
               <div key={key} className="flex gap-2">
                 <div

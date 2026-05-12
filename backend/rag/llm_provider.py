@@ -1,7 +1,7 @@
 """
 Unified LLM provider abstraction.
 
-Supports: Ollama (local), OpenAI, Anthropic, Google Gemini, Groq, OpenRouter.
+Supports: Ollama (local), OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, NVIDIA.
 All providers expose the same async streaming interface.
 
 Usage:
@@ -25,7 +25,7 @@ from pydantic import BaseModel
 
 
 class LLMConfig(BaseModel):
-    provider: str = "ollama"          # ollama | ollama_cloud | openai | anthropic | gemini | groq | openrouter
+    provider: str = "ollama"          # ollama | ollama_cloud | openai | anthropic | gemini | groq | openrouter | nvidia
     model: str = "qwen2.5:7b"         # model name / id
     api_key: str = ""                  # legacy / default
     base_url: str = ""                 # override for custom endpoints
@@ -62,7 +62,7 @@ class LLMConfig(BaseModel):
             #   No API key   → local Ollama daemon (user ran `ollama signin`,
             #                  daemon transparently proxies cloud model requests)
             if self.effective_api_key:
-                return "https://api.ollama.com"
+                return "https://ollama.com"
             # In Docker, localhost:11434 is inside the container — not the host.
             # OLLAMA_BASE_URL env var lets docker-compose point to the Ollama service.
             return os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -74,6 +74,7 @@ class LLMConfig(BaseModel):
             "openai": "https://api.openai.com/v1",
             "groq": "https://api.groq.com/openai/v1",
             "openrouter": "https://openrouter.ai/api/v1",
+            "nvidia": "https://integrate.api.nvidia.com/v1",
             "anthropic": "https://api.anthropic.com",
             "gemini": "https://generativelanguage.googleapis.com/v1beta",
         }
@@ -193,6 +194,11 @@ class OpenAICompatProvider:
             base_url=self.config.effective_base_url,
         )
 
+    def _extra_request_kwargs(self, model: str) -> dict:
+        if self.config.provider == "nvidia" and "kimi" in model.lower():
+            return {"extra_body": {"chat_template_kwargs": {"thinking": True}}}
+        return {}
+
     async def chat_stream(
         self,
         system: str,
@@ -211,6 +217,7 @@ class OpenAICompatProvider:
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             stream=True,
+            **self._extra_request_kwargs(model),
         )
         async for chunk in stream:
             delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -224,6 +231,9 @@ class OpenAICompatProvider:
         model: str | None = None,
     ) -> str:
         model = model or self.config.model
+        if model == "auto":
+            model = AUTO_RESOLVE.get(self.config.provider, "gpt-4o")
+
         all_messages = [{"role": "system", "content": system}] + messages
         client = self._client()
         resp = await client.chat.completions.create(
@@ -231,6 +241,7 @@ class OpenAICompatProvider:
             messages=all_messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
+            **self._extra_request_kwargs(model),
         )
         return resp.choices[0].message.content or ""
 
@@ -392,7 +403,7 @@ def get_provider(config: LLMConfig) -> OllamaProvider | OpenAICompatProvider | A
         return GeminiProvider(config)
     elif p == "ollama_cloud":
         return OllamaProvider(config)
-    elif p in ("openai", "groq", "openrouter"):
+    elif p in ("openai", "groq", "openrouter", "nvidia"):
         return OpenAICompatProvider(config)
     else:
         # Unknown provider — try OpenAI-compatible
@@ -404,19 +415,13 @@ DEFAULT_MODELS: dict[str, list[str]] = {
     "ollama": ["auto", "gemma4:latest", "qwen2.5:7b", "qwen2.5:14b", "llama3.2:3b", "mistral:7b", "phi4:14b"],
     "ollama_cloud": [
         "auto",
-        "kimi-k2:1t-cloud",
-        "kimi-k2.6:cloud",
-        "kimi-k2.5:cloud",
-        "kimi-k2-thinking:cloud",
-        "deepseek-v3.1:671b-cloud",
-        "qwen3:235b-cloud",
-        "qwen3-coder:480b-cloud",
         "gpt-oss:120b-cloud",
+        "qwen3-coder:480b-cloud",
+        "nemotron-3-super:cloud",
+        "glm-4.7:cloud",
+        "minimax-m2.5:cloud",
+        "minimax-m2.1:cloud",
         "gpt-oss:20b-cloud",
-        "qwen3-vl:235b-cloud",
-        "glm-4.6:cloud",
-        "glm-5:cloud",
-        "glm-5.1:cloud",
     ],
     "openai": ["auto", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
     "anthropic": ["auto", "claude-sonnet-4-5", "claude-haiku-4-5-20251001", "claude-opus-4-6"],
@@ -434,17 +439,33 @@ DEFAULT_MODELS: dict[str, list[str]] = {
         "mixtral-8x7b-32768"
     ],
     "openrouter": ["auto", "anthropic/claude-3.5-sonnet", "openai/gpt-4o", "meta-llama/llama-3.3-70b-instruct"],
+    "nvidia": [
+        "auto",
+        "mistralai/mistral-large-3-675b-instruct-2512",
+        "z-ai/glm-4.7",
+        "minimaxai/minimax-m2.7",
+        "qwen/qwen3-coder-480b-a35b-instruct",
+        "stepfun-ai/step-3.5-flash",
+        "mistralai/mistral-nemotron",
+        "bytedance/seed-oss-36b-instruct",
+        "meta/llama-4-maverick-17b-128e-instruct",
+        "microsoft/phi-4-multimodal-instruct",
+        "abacusai/dracarys-llama-3.1-70b-instruct",
+        "moonshotai/kimi-k2-thinking",
+        "moonshotai/kimi-k2-instruct",
+    ],
 }
 
 # Best model per provider (used when "auto" is selected)
 AUTO_RESOLVE: dict[str, str] = {
     "ollama": "gemma4:latest",
-    "ollama_cloud": "deepseek-v3.1:671b-cloud",
+    "ollama_cloud": "gpt-oss:120b-cloud",
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-sonnet-20240620",
     "gemini": "gemini-2.0-flash",
     "groq": "llama-3.3-70b-versatile",
     "openrouter": "anthropic/claude-3.5-sonnet",
+    "nvidia": "mistralai/mistral-large-3-675b-instruct-2512",
 }
 
 # Optimal number of chunks to send to LLM (balance accuracy vs quota)
@@ -456,4 +477,5 @@ RECOMMENDED_TOP_K: dict[str, int] = {
     "ollama": 8,         # Local performance balance
     "ollama_cloud": 16,  # kimi-k2 has 256K context — use more chunks
     "openrouter": 10,
+    "nvidia": 12,
 }

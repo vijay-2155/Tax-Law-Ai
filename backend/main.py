@@ -152,6 +152,7 @@ async def lifespan(app: FastAPI):
         ("gemini",       "GEMINI_API_KEY"),
         ("groq",         "GROQ_API_KEY"),
         ("openrouter",   "OPENROUTER_API_KEY"),
+        ("nvidia",       "NVIDIA_API_KEY"),
     ]:
         val = os.environ.get(env_var)
         if val:

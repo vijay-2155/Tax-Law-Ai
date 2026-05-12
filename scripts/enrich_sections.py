@@ -147,7 +147,7 @@ def main():
     )
     parser.add_argument(
         "--provider", default="ollama_cloud",
-        choices=["ollama", "ollama_cloud", "openai", "anthropic", "gemini", "groq", "openrouter"],
+        choices=["ollama", "ollama_cloud", "openai", "anthropic", "gemini", "groq", "openrouter", "nvidia"],
         help="LLM provider (default: ollama_cloud in signed-in mode)",
     )
     parser.add_argument(
@@ -196,14 +196,15 @@ def main():
     if not model:
         defaults = {
             "ollama":       "gemma4:latest",
-            "ollama_cloud": "deepseek-v3.1:671b-cloud",
+            "ollama_cloud": "gpt-oss:120b-cloud",
             "openai":       "gpt-4o-mini",
             "anthropic":    "claude-haiku-4-5-20251001",
             "gemini":       "gemini-2.0-flash",
             "groq":         "llama-3.3-70b-versatile",
             "openrouter":   "meta-llama/llama-3.3-70b-instruct",
+            "nvidia":       "mistralai/mistral-large-3-675b-instruct-2512",
         }
-        model = defaults.get(provider, "deepseek-v3.1:671b-cloud")
+        model = defaults.get(provider, "gpt-oss:120b-cloud")
 
     provider_api_keys = {}
     if args.api_key:

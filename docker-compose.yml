@@ -37,8 +37,8 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:11434:11434"   # expose locally so UI/CLI can also reach it
+    # ports:
+    #   - "127.0.0.1:11434:11434"   # expose locally so UI/CLI can also reach it
     volumes:
       - ollama_models:/root/.ollama   # pulled models persist between restarts
     # GPU passthrough (optional — remove or comment out if you don't have a GPU)
@@ -58,7 +58,10 @@ services:
 
   # ── TaxIQ app (FastAPI backend + React frontend) ──────────────────────────────
   app:
-    image: ghcr.io/vijay-2155/tax-law-ai:latest   # pre-built — no source code needed
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tax-law-ai:local
     restart: unless-stopped
     ports:
       - "127.0.0.1:8000:8000"   # localhost only — blocks public internet access
@@ -72,9 +75,9 @@ services:
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ""
       # Ollama runs as a sibling Docker service — no host config needed!
-      OLLAMA_BASE_URL: http://ollama:11434
-      LLM_PROVIDER: ollama
-      LLM_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}
     env_file:
       - path: .env                     # user's optional overrides (API keys, model choice)
         required: false                # works without .env — defaults above are used
