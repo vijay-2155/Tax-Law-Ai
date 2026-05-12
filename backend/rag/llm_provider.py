@@ -194,9 +194,9 @@ class OpenAICompatProvider:
             base_url=self.config.effective_base_url,
         )
 
-    def _extra_request_kwargs(self, model: str) -> dict:
-        if self.config.provider == "nvidia" and "kimi" in model.lower():
-            return {"extra_body": {"chat_template_kwargs": {"thinking": True}}}
+    def _extra_request_kwargs(self) -> dict:
+        if self.config.provider == "nvidia":
+            return {"extra_body": {"chat_template_kwargs": {"thinking": False}}}
         return {}
 
     async def chat_stream(
@@ -217,7 +217,7 @@ class OpenAICompatProvider:
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             stream=True,
-            **self._extra_request_kwargs(model),
+            **self._extra_request_kwargs(),
         )
         async for chunk in stream:
             delta = chunk.choices[0].delta.content if chunk.choices else None
@@ -241,7 +241,7 @@ class OpenAICompatProvider:
             messages=all_messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
-            **self._extra_request_kwargs(model),
+            **self._extra_request_kwargs(),
         )
         return resp.choices[0].message.content or ""
 
